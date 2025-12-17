@@ -8,7 +8,7 @@
     <!-- ספריית Three.js לתלת מימד -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-    <!-- אייקון האתר (Favicon) -->
+    <!-- אייקון האתר (Favicon) - T בתוך עיגול סגול -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='grad' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%23c026d3;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%23701a75;stop-opacity:1' /%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='16' fill='url(%23grad)' /%3E%3Ctext x='15' y='17' font-family='Arial, sans-serif' font-weight='bold' font-size='19' text-anchor='middle' dominant-baseline='middle' fill='white'%3ET%3C/text%3E%3C/svg%3E">
 
     <!-- ייבוא פונט Rubik לעברית -->
@@ -139,6 +139,7 @@
             display: block;
             border-radius: 20px;
             overflow: hidden;
+            background: radial-gradient(circle at center, #2d1b4e 0%, #000 100%);
         }
         
         /* סטייל לסליידר וסלקט */
@@ -192,7 +193,6 @@
         </div>
         
         <div id="cart-items-container" class="flex-1 overflow-y-auto p-6 space-y-6">
-            <!-- פריטים יתווספו לכאן דינמית -->
             <div class="text-center text-gray-500 mt-10">
                 <p>הסל שלך ריק כרגע...</p>
             </div>
@@ -1727,131 +1727,234 @@
             event.target.reset(); // ניקוי הטופס
         }
 
-        // --- Three.js Logic ---
+        // --- Three.js Logic (Updated) ---
         let scene, camera, renderer;
-        let ringMesh, gemMesh;
+        let ringGroup; // A group to hold the ring and gem
+        let gemMesh;
         let is3DInitialized = false;
 
+        // Define ring properties for easy access
+        const ringProps = {
+            radius: 3,
+            tube: 0.3,
+        };
+
         function init3D() {
-            if (is3DInitialized) return;
+            if (is3DInitialized) {
+                // If already initialized, just ensure it's visible and rendering
+                animate();
+                return;
+            }
             const container = document.getElementById('three-container');
-            if (!container) return;
+            if (!container || !container.isConnected) return;
 
             // Scene setup
             scene = new THREE.Scene();
-            
+
             // Camera setup
             camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-            camera.position.set(0, 5, 10);
+            camera.position.set(0, 3, 12);
             camera.lookAt(0, 0, 0);
 
             // Renderer setup
             renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
             renderer.setSize(container.clientWidth, container.clientHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true; // Enable shadows for more realism
+            container.innerHTML = ''; // Clear previous canvas if any
             container.appendChild(renderer.domElement);
 
             // Lights
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
             scene.add(ambientLight);
 
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-            directionalLight.position.set(5, 10, 7);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            directionalLight.position.set(8, 10, 5);
+            directionalLight.castShadow = true;
             scene.add(directionalLight);
             
-            const pointLight = new THREE.PointLight(0xffffff, 0.5);
-            pointLight.position.set(-5, 5, 5);
+            const pointLight = new THREE.PointLight(0xffffff, 0.6);
+            pointLight.position.set(-8, 5, -5);
             scene.add(pointLight);
+
+            // Create the group that will hold the ring and gem
+            ringGroup = new THREE.Group();
+            scene.add(ringGroup);
 
             // Initial Objects
             createRing(0xffd700); // Yellow gold default
             createGem(0xffffff, 'round'); // Diamond round default
 
+            // Set initial rotation for a better view
+            ringGroup.rotation.x = -Math.PI / 6;
+            ringGroup.rotation.y = Math.PI / 4;
+
             is3DInitialized = true;
             animate();
             
             // Handle resize
-            window.addEventListener('resize', () => {
-                if (!is3DInitialized) return;
+            const resizeObserver = new ResizeObserver(() => {
+                if (!is3DInitialized || !container.isConnected) return;
                 const width = container.clientWidth;
                 const height = container.clientHeight;
                 renderer.setSize(width, height);
                 camera.aspect = width / height;
                 camera.updateProjectionMatrix();
             });
+            resizeObserver.observe(container);
         }
 
         function createRing(color) {
-            if (ringMesh) scene.remove(ringMesh);
+            // If a ring mesh already exists in the group, remove it
+            const existingRing = ringGroup.children.find(child => child.name === "ring");
+            if (existingRing) {
+                ringGroup.remove(existingRing);
+                existingRing.geometry.dispose();
+                existingRing.material.dispose();
+            }
 
-            const geometry = new THREE.TorusGeometry(3, 0.3, 16, 100);
+            const geometry = new THREE.TorusGeometry(ringProps.radius, ringProps.tube, 22, 100);
             const material = new THREE.MeshStandardMaterial({ 
                 color: color, 
                 metalness: 1.0, 
-                roughness: 0.3 
+                roughness: 0.35
             });
-            ringMesh = new THREE.Mesh(geometry, material);
+            const ringMesh = new THREE.Mesh(geometry, material);
+            ringMesh.name = "ring"; // Name the object for easy removal
             ringMesh.rotation.x = Math.PI / 2;
-            scene.add(ringMesh);
+            ringMesh.castShadow = true;
+            ringMesh.receiveShadow = true;
+            
+            ringGroup.add(ringMesh);
+
+            // Prongs (Setting)
+            // Creating 4 prongs
+            const prongGeo = new THREE.CylinderGeometry(0.08, 0.05, 0.6, 8);
+            const prongMat = material; // Reuse same material as ring
+            
+            // Remove previous prongs if any (checking by name "prongsGroup")
+            const oldProngs = ringGroup.children.find(c => c.name === 'prongsGroup');
+            if(oldProngs) ringGroup.remove(oldProngs);
+
+            const prongsGroup = new THREE.Group();
+            prongsGroup.name = "prongsGroup";
+            
+            // Add 4 prongs around the top
+            for(let i=0; i<4; i++) {
+                const prong = new THREE.Mesh(prongGeo, prongMat);
+                // Position around the gem (at 0, radius, 0 roughly)
+                // We'll place them on a circle of radius ~0.6 (size of gem)
+                const angle = (Math.PI / 4) + (i * Math.PI / 2); 
+                const dist = 0.55; 
+                prong.position.set(Math.cos(angle)*dist, ringProps.radius + 0.1, Math.sin(angle)*dist);
+                // Angle them slightly inwards
+                prong.lookAt(0, ringProps.radius + 1.5, 0);
+                prongsGroup.add(prong);
+            }
+            ringGroup.add(prongsGroup);
         }
 
         function createGem(color, shape) {
-            if (gemMesh) scene.remove(gemMesh);
-
-            let geometry;
-            if (shape === 'round') {
-                // Approximate brilliant cut with cone + cylinder
-                geometry = new THREE.ConeGeometry(0.8, 1, 32); 
-                // In a real app we'd merge geometries or use a custom model
-            } else if (shape === 'square') {
-                geometry = new THREE.ConeGeometry(0.8, 1, 4);
-                geometry.rotateY(Math.PI / 4);
-            } else if (shape === 'emerald') {
-                geometry = new THREE.BoxGeometry(0.8, 1, 0.6);
-            } else {
-                geometry = new THREE.ConeGeometry(0.8, 1, 32);
+            // If a gem mesh already exists in the group, remove it
+            const existingGem = ringGroup.children.find(child => child.name === "gem");
+            if (existingGem) {
+                ringGroup.remove(existingGem);
+                // Clean up children geometries/materials if it's a group now
+                 // But we will make it a single Mesh for simplicity or Group
+                // Actually let's make gem a group of crown and pavilion
             }
+            
+            // Remove old gem group if exists
+            const oldGemGroup = ringGroup.children.find(c => c.name === 'gemGroup');
+            if(oldGemGroup) ringGroup.remove(oldGemGroup);
+
 
             const material = new THREE.MeshPhysicalMaterial({
                 color: color,
                 metalness: 0.1,
-                roughness: 0,
-                transmission: 0.6, // Glass-like transparency
-                opacity: 1,
-                transparent: true
+                roughness: 0.05,
+                transmission: 0.9, // Glass-like transparency
+                opacity: 0.9,
+                reflectivity: 0.9,
+                ior: 2.4, // Index of Refraction for diamond
+                transparent: true,
             });
 
-            gemMesh = new THREE.Mesh(geometry, material);
-            
-            // Position gem on top of ring
-            gemMesh.position.set(0, 3.3, 0);
-            if (shape === 'round' || shape === 'square') {
-                 gemMesh.rotation.x = Math.PI; // Point down
-                 gemMesh.position.y = 3.6; // Adjust height for pointy bit
+            const gemGroup = new THREE.Group();
+            gemGroup.name = "gemGroup";
+
+            let crownGeo, pavilionGeo;
+            const size = 0.8; 
+
+            if (shape === 'round') {
+                // Crown: Cylinder tapering to top (or Cone)
+                // Pavilion: Cone
+                crownGeo = new THREE.CylinderGeometry(0.3, size/2, 0.2, 32);
+                pavilionGeo = new THREE.ConeGeometry(size/2, 0.5, 32);
+            } else if (shape === 'square') {
+                crownGeo = new THREE.CylinderGeometry(0.3, size/2, 0.2, 4);
+                pavilionGeo = new THREE.ConeGeometry(size/2, 0.5, 4);
+                gemGroup.rotation.y = Math.PI / 4;
+            } else { // emerald (rectangularish)
+                // Box geometry for emerald cut simplified
+                 crownGeo = new THREE.BoxGeometry(size*0.7, 0.2, size);
+                 pavilionGeo = new THREE.ConeGeometry(size*0.6, 0.5, 4); // simplistic
+                 // Actually just using box for emerald visual distinction
+                 crownGeo = new THREE.BoxGeometry(0.5, 0.2, 0.8);
+                 pavilionGeo = new THREE.BoxGeometry(0.3, 0.4, 0.6); // fake depth
             }
+
+            const crown = new THREE.Mesh(crownGeo, material);
+            const pavilion = new THREE.Mesh(pavilionGeo, material);
             
-            scene.add(gemMesh);
+            // Position parts
+            crown.position.y = 0.1; // Move up
+            pavilion.geometry.rotateX(Math.PI); // Flip cone
+            pavilion.position.y = -0.25; // Move down
+
+            gemGroup.add(crown);
+            gemGroup.add(pavilion);
+
+            // Position entire gem on ring
+            gemGroup.position.set(0, ringProps.radius + 0.35, 0);
+            
+            // Apply scale
+            const currentScale = parseFloat(document.getElementById('carat-val')?.innerText || "1.0");
+            gemGroup.scale.set(currentScale, currentScale, currentScale);
+            
+            gemMesh = gemGroup; // Reference for updates
+            ringGroup.add(gemGroup);
         }
 
         function updateGemMaterial(color) {
             if (gemMesh) {
-                gemMesh.material.color.setHex(color);
+                gemMesh.children.forEach(child => {
+                    child.material.color.setHex(color);
+                });
             }
         }
-        
+
         function updateRingMaterial(color) {
+            const ringMesh = ringGroup.children.find(child => child.name === "ring");
             if (ringMesh) {
                 ringMesh.material.color.setHex(color);
+                // Also update prongs
+                const prongsGroup = ringGroup.children.find(c => c.name === "prongsGroup");
+                if(prongsGroup) {
+                     prongsGroup.children.forEach(p => p.material.color.setHex(color));
+                }
             }
         }
-        
+
         function updateGemGeometry(shape) {
-            // Need to recreate geometry
             // Get current color
-            const currentColor = gemMesh.material.color.getHex();
+            let currentColor = 0xffffff;
+            if (gemMesh && gemMesh.children[0]) {
+                 currentColor = gemMesh.children[0].material.color.getHex();
+            }
             createGem(currentColor, shape);
         }
-        
+
         function updateGemScale(val) {
             if (gemMesh) {
                 const scale = parseFloat(val);
@@ -1860,12 +1963,21 @@
         }
 
         function animate() {
+            // Only continue animation loop if the 3D container is on the page
+            if (!document.getElementById('three-container')?.isConnected) {
+                is3DInitialized = false; // Stop animation loop
+                if(renderer) {
+                    renderer.dispose(); // Clean up resources
+                }
+                return;
+            }
+            
             requestAnimationFrame(animate);
             
-            if (ringMesh) ringMesh.rotation.z += 0.005;
-            // Rotate the whole group or camera for effect? 
-            // Let's rotate the scene slightly
-            scene.rotation.y += 0.005;
+            // Rotate the whole group together
+            if (ringGroup) {
+                ringGroup.rotation.y += 0.005;
+            }
 
             renderer.render(scene, camera);
         }
