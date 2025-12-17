@@ -1727,72 +1727,139 @@
             event.target.reset(); // ניקוי הטופס
         }
 
-        // --- Three.js Logic (Updated) ---
+// --- לוגיקה תלת מימדית מעודכנת (Three.js) ---
         let scene, camera, renderer;
-        let ringGroup; // A group to hold the ring and gem
+        let ringGroup; // קבוצה שתכיל את הטבעת והיהלום
         let gemMesh;
         let is3DInitialized = false;
 
-        // Define ring properties for easy access
+        // משתנים לשליטה בעכבר (סיבוב)
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+
+        // הגדרות בסיס לטבעת
         const ringProps = {
             radius: 3,
-            tube: 0.3,
+            tube: 0.35, // עביתי קצת את הטבעת למראה ריאליסטי
         };
 
         function init3D() {
             if (is3DInitialized) {
-                // If already initialized, just ensure it's visible and rendering
                 animate();
                 return;
             }
             const container = document.getElementById('three-container');
             if (!container || !container.isConnected) return;
 
-            // Scene setup
+            // יצירת סצנה
             scene = new THREE.Scene();
 
-            // Camera setup
+            // הגדרת מצלמה
             camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-            camera.position.set(0, 3, 12);
+            camera.position.set(0, 2, 10); // זווית מבט ראשונית
             camera.lookAt(0, 0, 0);
 
-            // Renderer setup
+            // הגדרת רנדרר
             renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
             renderer.setSize(container.clientWidth, container.clientHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.shadowMap.enabled = true; // Enable shadows for more realism
-            container.innerHTML = ''; // Clear previous canvas if any
+            renderer.shadowMap.enabled = true; 
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            container.innerHTML = ''; 
             container.appendChild(renderer.domElement);
 
-            // Lights
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            // --- תאורה (חשוב לריאליזם של מתכת ואבנים) ---
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
             scene.add(ambientLight);
 
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
-            directionalLight.position.set(8, 10, 5);
-            directionalLight.castShadow = true;
-            scene.add(directionalLight);
-            
-            const pointLight = new THREE.PointLight(0xffffff, 0.6);
-            pointLight.position.set(-8, 5, -5);
-            scene.add(pointLight);
+            const spotLight = new THREE.SpotLight(0xffffff, 1.5);
+            spotLight.position.set(10, 10, 10);
+            spotLight.castShadow = true;
+            spotLight.shadow.mapSize.width = 1024;
+            spotLight.shadow.mapSize.height = 1024;
+            scene.add(spotLight);
 
-            // Create the group that will hold the ring and gem
+            const pointLight1 = new THREE.PointLight(0xffffff, 0.8);
+            pointLight1.position.set(-10, 5, 0);
+            scene.add(pointLight1);
+            
+            const pointLight2 = new THREE.PointLight(0xffffff, 0.5);
+            pointLight2.position.set(0, -5, 5);
+            scene.add(pointLight2);
+
+            // --- יצירת הקבוצה הראשית ---
             ringGroup = new THREE.Group();
             scene.add(ringGroup);
 
-            // Initial Objects
-            createRing(0xffd700); // Yellow gold default
-            createGem(0xffffff, 'round'); // Diamond round default
-
-            // Set initial rotation for a better view
-            ringGroup.rotation.x = -Math.PI / 6;
-            ringGroup.rotation.y = Math.PI / 4;
+            // יצירה ראשונית
+            createRing(0xffd700); // זהב צהוב
+            createGem(0xffffff, 'round'); // יהלום עגול
 
             is3DInitialized = true;
+
+            // --- הוספת אינטראקציה עם העכבר ---
+            const canvas = renderer.domElement;
+            
+            // התחלת גרירה
+            canvas.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+                canvas.style.cursor = 'grabbing';
+            });
+            
+            // סיום גרירה
+            window.addEventListener('mouseup', () => {
+                isDragging = false;
+                canvas.style.cursor = 'grab';
+            });
+
+            // תנועת גרירה
+            canvas.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                const deltaMove = {
+                    x: e.clientX - previousMousePosition.x,
+                    y: e.clientY - previousMousePosition.y
+                };
+
+                if (ringGroup) {
+                    // סיבוב סביב ציר Y (ימינה שמאלה)
+                    ringGroup.rotation.y += deltaMove.x * 0.01;
+                    
+                    // סיבוב סביב ציר X (למעלה למטה) - עם הגבלה שלא יתהפך לגמרי
+                    ringGroup.rotation.x += deltaMove.y * 0.01;
+                }
+
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+
+            // תמיכה במובייל (Touch)
+            canvas.addEventListener('touchstart', (e) => {
+                isDragging = true;
+                previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }, {passive: false});
+
+            canvas.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                e.preventDefault(); // מניעת גלילת המסך
+                const deltaMove = {
+                    x: e.touches[0].clientX - previousMousePosition.x,
+                    y: e.touches[0].clientY - previousMousePosition.y
+                };
+                if (ringGroup) {
+                    ringGroup.rotation.y += deltaMove.x * 0.01;
+                    ringGroup.rotation.x += deltaMove.y * 0.01;
+                }
+                previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }, {passive: false});
+
+            canvas.addEventListener('touchend', () => { isDragging = false; });
+
+            // התחלת אנימציה
             animate();
             
-            // Handle resize
+            // טיפול בשינוי גודל מסך
             const resizeObserver = new ResizeObserver(() => {
                 if (!is3DInitialized || !container.isConnected) return;
                 const width = container.clientWidth;
@@ -1805,156 +1872,140 @@
         }
 
         function createRing(color) {
-            // If a ring mesh already exists in the group, remove it
-            const existingRing = ringGroup.children.find(child => child.name === "ring");
-            if (existingRing) {
-                ringGroup.remove(existingRing);
-                existingRing.geometry.dispose();
-                existingRing.material.dispose();
-            }
+            // ניקוי טבעת קיימת אם יש
+            const toRemove = [];
+            ringGroup.traverse((child) => {
+                if (child.isMesh && (child.name === "ring" || child.name === "prong")) {
+                    toRemove.push(child);
+                }
+            });
+            toRemove.forEach(child => {
+                ringGroup.remove(child);
+                child.geometry.dispose();
+                child.material.dispose();
+            });
 
-            const geometry = new THREE.TorusGeometry(ringProps.radius, ringProps.tube, 22, 100);
+            // חומר מתכתי מבריק
             const material = new THREE.MeshStandardMaterial({ 
                 color: color, 
-                metalness: 1.0, 
-                roughness: 0.35
+                metalness: 0.9, 
+                roughness: 0.2,
             });
+
+            // גוף הטבעת - עומד (לא שוכב)
+            // TorusGeometry(radius, tube, radialSegments, tubularSegments)
+            const geometry = new THREE.TorusGeometry(ringProps.radius, ringProps.tube, 30, 200);
             const ringMesh = new THREE.Mesh(geometry, material);
-            ringMesh.name = "ring"; // Name the object for easy removal
-            ringMesh.rotation.x = Math.PI / 2;
+            ringMesh.name = "ring";
+            // לא מסובבים ב-90 מעלות ב-X, כך היא עומדת מול המצלמה
             ringMesh.castShadow = true;
             ringMesh.receiveShadow = true;
-            
             ringGroup.add(ringMesh);
 
-            // Prongs (Setting)
-            // Creating 4 prongs
-            const prongGeo = new THREE.CylinderGeometry(0.08, 0.05, 0.6, 8);
-            const prongMat = material; // Reuse same material as ring
-            
-            // Remove previous prongs if any (checking by name "prongsGroup")
-            const oldProngs = ringGroup.children.find(c => c.name === 'prongsGroup');
-            if(oldProngs) ringGroup.remove(oldProngs);
+            // הוספת "בית" לאבן (Prongs/Settings)
+            // יוצרים 4 שיניים שמחזיקות את האבן
+            const prongGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1.5, 16);
+            const positions = [
+                {x: 0.6, y: ringProps.radius + 0.5, z: 0.6},
+                {x: -0.6, y: ringProps.radius + 0.5, z: 0.6},
+                {x: 0.6, y: ringProps.radius + 0.5, z: -0.6},
+                {x: -0.6, y: ringProps.radius + 0.5, z: -0.6},
+            ];
 
-            const prongsGroup = new THREE.Group();
-            prongsGroup.name = "prongsGroup";
-            
-            // Add 4 prongs around the top
-            for(let i=0; i<4; i++) {
-                const prong = new THREE.Mesh(prongGeo, prongMat);
-                // Position around the gem (at 0, radius, 0 roughly)
-                // We'll place them on a circle of radius ~0.6 (size of gem)
-                const angle = (Math.PI / 4) + (i * Math.PI / 2); 
-                const dist = 0.55; 
-                prong.position.set(Math.cos(angle)*dist, ringProps.radius + 0.1, Math.sin(angle)*dist);
-                // Angle them slightly inwards
-                prong.lookAt(0, ringProps.radius + 1.5, 0);
-                prongsGroup.add(prong);
-            }
-            ringGroup.add(prongsGroup);
+            positions.forEach(pos => {
+                const prong = new THREE.Mesh(prongGeometry, material);
+                prong.position.set(pos.x, pos.y, pos.z);
+                // הטיית השיניים לכיוון המרכז
+                prong.lookAt(0, ringProps.radius + 1.5, 0); 
+                prong.name = "prong";
+                ringGroup.add(prong);
+            });
         }
 
         function createGem(color, shape) {
-            // If a gem mesh already exists in the group, remove it
+            // הסרת אבן קיימת
             const existingGem = ringGroup.children.find(child => child.name === "gem");
             if (existingGem) {
                 ringGroup.remove(existingGem);
-                // Clean up children geometries/materials if it's a group now
-                 // But we will make it a single Mesh for simplicity or Group
-                // Actually let's make gem a group of crown and pavilion
+                existingGem.geometry.dispose();
+                existingGem.material.dispose();
             }
-            
-            // Remove old gem group if exists
-            const oldGemGroup = ringGroup.children.find(c => c.name === 'gemGroup');
-            if(oldGemGroup) ringGroup.remove(oldGemGroup);
 
+            let geometry;
+            const baseSize = 0.9;
 
+            // יצירת צורות גיאומטריות שונות
+            if (shape === 'round') {
+                // שילוב של שני קונוסים ליצירת צורת יהלום קלאסי
+                geometry = new THREE.CylinderGeometry(baseSize * 0.6, 0.1, baseSize * 1.5, 8); 
+            } else if (shape === 'square') {
+                // פרינסס - מרובע
+                geometry = new THREE.CylinderGeometry(baseSize * 0.6, 0.1, baseSize * 1.5, 4);
+                geometry.rotateY(Math.PI / 4);
+            } else { // emerald
+                // אמרלד - מלבני
+                geometry = new THREE.BoxGeometry(baseSize * 0.8, baseSize * 1.2, baseSize * 0.6);
+            }
+
+            // חומר קריסטלי/זכוכיתי
             const material = new THREE.MeshPhysicalMaterial({
                 color: color,
                 metalness: 0.1,
-                roughness: 0.05,
-                transmission: 0.9, // Glass-like transparency
+                roughness: 0,
+                transmission: 0.6, // שקיפות
                 opacity: 0.9,
-                reflectivity: 0.9,
-                ior: 2.4, // Index of Refraction for diamond
                 transparent: true,
+                reflectivity: 1,
+                ior: 2.4, // מקדם שבירה של יהלום
+                side: THREE.DoubleSide
             });
 
-            const gemGroup = new THREE.Group();
-            gemGroup.name = "gemGroup";
+            gemMesh = new THREE.Mesh(geometry, material);
+            gemMesh.name = "gem";
 
-            let crownGeo, pavilionGeo;
-            const size = 0.8; 
-
-            if (shape === 'round') {
-                // Crown: Cylinder tapering to top (or Cone)
-                // Pavilion: Cone
-                crownGeo = new THREE.CylinderGeometry(0.3, size/2, 0.2, 32);
-                pavilionGeo = new THREE.ConeGeometry(size/2, 0.5, 32);
-            } else if (shape === 'square') {
-                crownGeo = new THREE.CylinderGeometry(0.3, size/2, 0.2, 4);
-                pavilionGeo = new THREE.ConeGeometry(size/2, 0.5, 4);
-                gemGroup.rotation.y = Math.PI / 4;
-            } else { // emerald (rectangularish)
-                // Box geometry for emerald cut simplified
-                 crownGeo = new THREE.BoxGeometry(size*0.7, 0.2, size);
-                 pavilionGeo = new THREE.ConeGeometry(size*0.6, 0.5, 4); // simplistic
-                 // Actually just using box for emerald visual distinction
-                 crownGeo = new THREE.BoxGeometry(0.5, 0.2, 0.8);
-                 pavilionGeo = new THREE.BoxGeometry(0.3, 0.4, 0.6); // fake depth
+            // מיקום היהלום: בחלק העליון של הטבעת
+            // רדיוס הטבעת + חצי גובה האבן בערך
+            gemMesh.position.set(0, ringProps.radius + 0.4, 0);
+            
+            // אם זו צורה עגולה/פרינסס (צילינדר), צריך ליישר אותה
+            if (shape !== 'emerald') {
+                 // הגיאומטריה של צילינדר עומדת כברירת מחדל, זה בסדר
+            } else {
+                 // אמרלד (קופסה) צריך להרים קצת אחרת
+                 gemMesh.position.y += 0.2;
             }
 
-            const crown = new THREE.Mesh(crownGeo, material);
-            const pavilion = new THREE.Mesh(pavilionGeo, material);
-            
-            // Position parts
-            crown.position.y = 0.1; // Move up
-            pavilion.geometry.rotateX(Math.PI); // Flip cone
-            pavilion.position.y = -0.25; // Move down
-
-            gemGroup.add(crown);
-            gemGroup.add(pavilion);
-
-            // Position entire gem on ring
-            gemGroup.position.set(0, ringProps.radius + 0.35, 0);
-            
-            // Apply scale
+            // יישום גודל (קראט)
             const currentScale = parseFloat(document.getElementById('carat-val')?.innerText || "1.0");
-            gemGroup.scale.set(currentScale, currentScale, currentScale);
-            
-            gemMesh = gemGroup; // Reference for updates
-            ringGroup.add(gemGroup);
+            gemMesh.scale.set(currentScale, currentScale, currentScale);
+
+            ringGroup.add(gemMesh);
         }
 
+        // עדכון צבע האבן
         function updateGemMaterial(color) {
             if (gemMesh) {
-                gemMesh.children.forEach(child => {
-                    child.material.color.setHex(color);
-                });
+                gemMesh.material.color.setHex(color);
             }
         }
 
+        // עדכון צבע הטבעת (כולל השיניים)
         function updateRingMaterial(color) {
-            const ringMesh = ringGroup.children.find(child => child.name === "ring");
-            if (ringMesh) {
-                ringMesh.material.color.setHex(color);
-                // Also update prongs
-                const prongsGroup = ringGroup.children.find(c => c.name === "prongsGroup");
-                if(prongsGroup) {
-                     prongsGroup.children.forEach(p => p.material.color.setHex(color));
+            ringGroup.children.forEach(child => {
+                if (child.name === "ring" || child.name === "prong") {
+                    child.material.color.setHex(color);
                 }
-            }
+            });
         }
 
+        // עדכון צורת האבן
         function updateGemGeometry(shape) {
-            // Get current color
-            let currentColor = 0xffffff;
-            if (gemMesh && gemMesh.children[0]) {
-                 currentColor = gemMesh.children[0].material.color.getHex();
-            }
+            if (!gemMesh) return;
+            const currentColor = gemMesh.material.color.getHex();
             createGem(currentColor, shape);
         }
 
+        // עדכון גודל האבן (סליידר)
         function updateGemScale(val) {
             if (gemMesh) {
                 const scale = parseFloat(val);
@@ -1963,20 +2014,17 @@
         }
 
         function animate() {
-            // Only continue animation loop if the 3D container is on the page
             if (!document.getElementById('three-container')?.isConnected) {
-                is3DInitialized = false; // Stop animation loop
-                if(renderer) {
-                    renderer.dispose(); // Clean up resources
-                }
+                is3DInitialized = false;
+                if(renderer) renderer.dispose();
                 return;
             }
             
             requestAnimationFrame(animate);
             
-            // Rotate the whole group together
-            if (ringGroup) {
-                ringGroup.rotation.y += 0.005;
+            // סיבוב אוטומטי איטי מאוד אם לא גוררים
+            if (!isDragging && ringGroup) {
+                ringGroup.rotation.y += 0.002;
             }
 
             renderer.render(scene, camera);
